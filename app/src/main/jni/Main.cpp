@@ -16,51 +16,54 @@
 #include "Menu/Setup.h"
 
 //Target lib here
-#define targetLibName OBFUSCATE("libFileA.so")
+#define targetLibName OBFUSCATE("libil2cpp.so")
 
 #include "Includes/Macros.h"
 
-bool feature1, feature2, featureHookToggle, Health;
-int sliderValue = 1, level = 0;
-void *instanceBtn;
+bool passThru = false,
+     oldPassThru = passThru,
 
-// Hooking examples. Assuming you know how to write hook
-void (*AddMoneyExample)(void *instance, int amount);
+     patchPlayerSpeed = false,
+     patchJumpHeight = false;
 
-bool (*old_get_BoolExample)(void *instance);
-bool get_BoolExample(void *instance) {
-    if (instance != NULL && featureHookToggle) {
-        return true;
+float playerSpeed = 10.0,
+      jumpHeight = 20.0;
+
+void (*set_ColliderEnable)(void *instance, bool value);
+void (*old_get_WorldBodyCenterPosition)(void *instance);
+void get_WorldBodyCenterPosition(void *instance) {
+    if (instance != NULL && oldPassThru != passThru) {
+        oldPassThru = passThru;
+        set_ColliderEnable(instance, !passThru);
     }
-    return old_get_BoolExample(instance);
+
+    old_get_WorldBodyCenterPosition(instance);
 }
 
-float (*old_get_FloatExample)(void *instance);
-float get_FloatExample(void *instance) {
-    if (instance != NULL && sliderValue > 1) {
-        return (float) sliderValue;
+float (*old_get_MinSpeed)(void *instance);
+float get_MinSpeed(void *instance) {
+    if (instance != NULL && patchPlayerSpeed) {
+        return (float) playerSpeed;
     }
-    return old_get_FloatExample(instance);
+    return old_get_MinSpeed(instance);
 }
 
-int (*old_Level)(void *instance);
-int Level(void *instance) {
-    if (instance != NULL && level) {
-        return (int) level;
+float (*old_get_MaxSpeed)(void *instance);
+float get_MaxSpeed(void *instance) {
+    if (instance != NULL && patchPlayerSpeed) {
+        return (float) playerSpeed;
     }
-    return old_Level(instance);
+    return old_get_MaxSpeed(instance);
 }
 
-void (*old_FunctionExample)(void *instance);
-void FunctionExample(void *instance) {
-    instanceBtn = instance;
-    if (instance != NULL) {
-        if (Health) {
-            *(int *) ((uint64_t) instance + 0x48) = 999;
-        }
+float (*old_get_JumpHeight)(void *instance);
+float get_JumpHeight(void *instance) {
+    if (instance != NULL && patchJumpHeight) {
+        return (float) jumpHeight;
     }
-    return old_FunctionExample(instance);
+    return old_get_JumpHeight(instance);
 }
+
 
 // we will run our hacks in a new thread so our while loop doesn't block process main thread
 void *hack_thread(void *) {
@@ -79,50 +82,19 @@ void *hack_thread(void *) {
 
     LOGI(OBFUSCATE("%s has been loaded"), (const char *) targetLibName);
 
-#if defined(__aarch64__) //To compile this code for arm64 lib only. Do not worry about greyed out highlighting code, it still works
-    // Hook example. Comment out if you don't use hook
-    // Strings in macros are automatically obfuscated. No need to obfuscate!
-    HOOK("str", FunctionExample, old_FunctionExample);
-    HOOK_LIB("libFileB.so", "0x123456", FunctionExample, old_FunctionExample);
-    HOOK_NO_ORIG("0x123456", FunctionExample);
-    HOOK_LIB_NO_ORIG("libFileC.so", "0x123456", FunctionExample);
-    HOOKSYM("__SymbolNameExample", FunctionExample, old_FunctionExample);
-    HOOKSYM_LIB("libFileB.so", "__SymbolNameExample", FunctionExample, old_FunctionExample);
-    HOOKSYM_NO_ORIG("__SymbolNameExample", FunctionExample);
-    HOOKSYM_LIB_NO_ORIG("libFileB.so", "__SymbolNameExample", FunctionExample);
+#if defined(__aarch64__) || true //To compile this code for arm64 lib only. Do not worry about greyed out highlighting code, it still works
 
-    // Patching offsets directly. Strings are automatically obfuscated too!
-    PATCH("0x20D3A8", "00 00 A0 E3 1E FF 2F E1");
-    PATCH_LIB("libFileB.so", "0x20D3A8", "00 00 A0 E3 1E FF 2F E1");
+    set_ColliderEnable = (void (*) (void *, bool)) getAbsoluteAddress("libil2cpp.so", 0x10C6C58);
+    HOOK_LIB("libil2cpp.so", "0x10C68E4", get_WorldBodyCenterPosition, old_get_WorldBodyCenterPosition);
 
-    AddMoneyExample = (void(*)(void *,int))getAbsoluteAddress(targetLibName, 0x123456);
+    HOOK_LIB("libil2cpp.so", "0x27B1C90", get_MinSpeed, old_get_MinSpeed);
+    HOOK_LIB("libil2cpp.so", "0x27B1E40", get_MaxSpeed, old_get_MaxSpeed);
+    HOOK_LIB("libil2cpp.so", "0x27B2284", get_JumpHeight, old_get_JumpHeight);
 
-#else //To compile this code for armv7 lib only.
+    LOGI(OBFUSCATE("Hooked functions"));
+#else
 
-    // Hook example. Comment out if you don't use hook
-    // Strings in macros are automatically obfuscated. No need to obfuscate!
-    HOOK("str", FunctionExample, old_FunctionExample);
-    HOOK_LIB("libFileB.so", "0x123456", FunctionExample, old_FunctionExample);
-    HOOK_NO_ORIG("0x123456", FunctionExample);
-    HOOK_LIB_NO_ORIG("libFileC.so", "0x123456", FunctionExample);
-    HOOKSYM("__SymbolNameExample", FunctionExample, old_FunctionExample);
-    HOOKSYM_LIB("libFileB.so", "__SymbolNameExample", FunctionExample, old_FunctionExample);
-    HOOKSYM_NO_ORIG("__SymbolNameExample", FunctionExample);
-    HOOKSYM_LIB_NO_ORIG("libFileB.so", "__SymbolNameExample", FunctionExample);
-
-    // Patching offsets directly. Strings are automatically obfuscated too!
-    PATCH("0x20D3A8", "00 00 A0 E3 1E FF 2F E1");
-    PATCH_LIB("libFileB.so", "0x20D3A8", "00 00 A0 E3 1E FF 2F E1");
-
-    //Restore changes to original
-    RESTORE("0x20D3A8");
-    RESTORE_LIB("libFileB.so", "0x20D3A8");
-
-    AddMoneyExample = (void (*)(void *, int)) getAbsoluteAddress(targetLibName, 0x123456);
-
-    LOGI(OBFUSCATE("Done"));
 #endif
-
     //Anti-leech
     /*if (!iconValid || !initValid || !settingsValid) {
         //Bad function to make it crash
@@ -145,48 +117,38 @@ jobjectArray GetFeatureList(JNIEnv *env, jobject context) {
     jobjectArray ret;
 
     const char *features[] = {
-            OBFUSCATE("Category_The Category"), //Not counted
-            OBFUSCATE("Toggle_The toggle"),
-            OBFUSCATE(
-                    "100_Toggle_True_The toggle 2"), //This one have feature number assigned, and switched on by default
-            OBFUSCATE("110_Toggle_The toggle 3"), //This one too
-            OBFUSCATE("SeekBar_The slider_1_100"),
-            OBFUSCATE("SeekBar_Kittymemory slider example_1_5"),
-            OBFUSCATE("Spinner_The spinner_Items 1,Items 2,Items 3"),
-            OBFUSCATE("Button_The button"),
-            OBFUSCATE("ButtonLink_The button with link_https://www.youtube.com/"), //Not counted
-            OBFUSCATE("ButtonOnOff_The On/Off button"),
-            OBFUSCATE("CheckBox_The Check Box"),
-            OBFUSCATE("InputValue_Input number"),
-            OBFUSCATE("InputValue_1000_Input number 2"), //Max value
-            OBFUSCATE("InputText_Input text"),
-            OBFUSCATE("RadioButton_Radio buttons_OFF,Mod 1,Mod 2,Mod 3"),
+            OBFUSCATE("Category_Misc"),
+            OBFUSCATE("1_Toggle_Purchase for free"),
+            OBFUSCATE("2_Toggle_Don't consume items"),
+            OBFUSCATE("3_Toggle_GodMode"),
 
-            //Create new collapse
-            OBFUSCATE("Collapse_Collapse 1"),
-            OBFUSCATE("CollapseAdd_Toggle_The toggle"),
-            OBFUSCATE("CollapseAdd_Toggle_The toggle"),
-            OBFUSCATE("123_CollapseAdd_Toggle_The toggle"),
-            OBFUSCATE("122_CollapseAdd_CheckBox_Check box"),
-            OBFUSCATE("CollapseAdd_Button_The button"),
+            OBFUSCATE("Category_Powers"),
+            OBFUSCATE("15_Toggle_Infinite Magnet time"),
+            OBFUSCATE("16_Toggle_Infinite Double Score time"),
+            OBFUSCATE("17_Toggle_Infinite Jetpack time"),
+            OBFUSCATE("18_Toggle_Infinite Super Sneaker time"),
+            OBFUSCATE("19_Toggle_Infinite board time"),
 
-            //Create new collapse again
-            OBFUSCATE("Collapse_Collapse 2_True"),
-            OBFUSCATE("CollapseAdd_SeekBar_The slider_1_100"),
-            OBFUSCATE("CollapseAdd_InputValue_Input number"),
+            OBFUSCATE("Category_Movement"),
+            OBFUSCATE("4_Toggle_Pass thru things"),
+            OBFUSCATE("11_Toggle_Infinite jump"),
+            OBFUSCATE("7_Toggle_No gravity"),
+            OBFUSCATE("14_Toggle_Auto jump"),
 
-            OBFUSCATE("RichTextView_This is text view, not fully HTML."
-                      "<b>Bold</b> <i>italic</i> <u>underline</u>"
-                      "<br />New line <font color='red'>Support colors</font>"
-                      "<br/><big>bigger Text</big>"),
-            OBFUSCATE("RichWebView_<html><head><style>body{color: white;}</style></head><body>"
-                      "This is WebView, with REAL HTML support!"
-                      "<div style=\"background-color: darkblue; text-align: center;\">Support CSS</div>"
-                      "<marquee style=\"color: green; font-weight:bold;\" direction=\"left\" scrollamount=\"5\" behavior=\"scroll\">This is <u>scrollable</u> text</marquee>"
-                      "</body></html>")
+            OBFUSCATE("Category_Player speed mod"),
+            OBFUSCATE("5_Toggle_Enabled"),
+            OBFUSCATE("6_SeekBar_Value_0_8000"),
+
+            OBFUSCATE("Category_Jump height mod"),
+            OBFUSCATE("9_Toggle_Enabled"),
+            OBFUSCATE("10_SeekBar_Value_0_2000"),
+
+            OBFUSCATE("Category_Camera"),
+            OBFUSCATE("8_Toggle_Lock camera"),
+            OBFUSCATE("12_Toggle_Camera follows you"),
+
     };
 
-    //Now you dont have to manually update the number everytime;
     int Total_Feature = (sizeof features / sizeof features[0]);
     ret = (jobjectArray)
             env->NewObjectArray(Total_Feature, env->FindClass(OBFUSCATE("java/lang/String")),
@@ -209,78 +171,74 @@ void Changes(JNIEnv *env, jclass clazz, jobject obj,
     //BE CAREFUL NOT TO ACCIDENTLY REMOVE break;
 
     switch (featNum) {
-        case 0:
-            // A much simpler way to patch hex via KittyMemory without need to specify the struct and len. Spaces or without spaces are fine
-            // ARMv7 assembly example
-            // MOV R0, #0x0 = 00 00 A0 E3
-            // BX LR = 1E FF 2F E1
-            PATCH_LIB_SWITCH("libil2cpp.so", "0x100000", "00 00 A0 E3 1E FF 2F E1", boolean);
-            break;
-        case 100:
-            //Reminder that the strings are auto obfuscated
-            //Switchable patch
-            PATCH_SWITCH("0x400000", "00 00 A0 E3 1E FF 2F E1", boolean);
-            PATCH_LIB_SWITCH("libil2cpp.so", "0x200000", "00 00 A0 E3 1E FF 2F E1", boolean);
-            PATCH_SYM_SWITCH("_SymbolExample", "00 00 A0 E3 1E FF 2F E1", boolean);
-            PATCH_LIB_SYM_SWITCH("libNativeGame.so", "_SymbolExample", "00 00 A0 E3 1E FF 2F E1", boolean);
-
-            //Restore patched offset to original
-            RESTORE("0x400000");
-            RESTORE_LIB("libil2cpp.so", "0x400000");
-            RESTORE_SYM("_SymbolExample");
-            RESTORE_LIB_SYM("libil2cpp.so", "_SymbolExample");
-            break;
-        case 110:
-            break;
         case 1:
-            if (value >= 1) {
-                sliderValue = value;
-            }
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x1797498", "00 00 80 D2 C0 03 5F D6", boolean);
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x22A37EC", "20 00 80 D2 C0 03 5F D6", boolean);
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x22A3828", "20 00 80 D2 C0 03 5F D6", boolean);
             break;
+
         case 2:
-            switch (value) {
-                //For noobies
-                case 0:
-                    RESTORE("0x0");
-                    break;
-                case 1:
-                    PATCH("0x0", "01 00 A0 E3 1E FF 2F E1");
-                    break;
-                case 2:
-                    PATCH("0x0", "02 00 A0 E3 1E FF 2F E1");
-                    break;
-            }
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x22A3410", "1F 20 03 D5 C0 03 5F D6", boolean);
             break;
+
         case 3:
-            switch (value) {
-                case 0:
-                    LOGD(OBFUSCATE("Selected item 1"));
-                    break;
-                case 1:
-                    LOGD(OBFUSCATE("Selected item 2"));
-                    break;
-                case 2:
-                    LOGD(OBFUSCATE("Selected item 3"));
-                    break;
-            }
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C96E8", "00 00 80 D2 C0 03 5F D6", boolean);
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C9BD8", "00 00 80 D2 C0 03 5F D6", boolean);
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C74E8", "1F 20 03 D5 C0 03 5F D6", boolean);
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C9AD4", "1F 20 03 D5 C0 03 5F D6", boolean);
             break;
+
         case 4:
-            // Since we have instanceBtn as a field, we can call it out of Update hook function
-            if (instanceBtn != NULL)
-                AddMoneyExample(instanceBtn, 999999);
-            // Toast(env, obj, OBFUSCATE("Button pressed"), ToastLength::LENGTH_SHORT);
+            passThru = boolean;
             break;
+
         case 5:
+            patchPlayerSpeed = boolean;
             break;
         case 6:
-            featureHookToggle = boolean;
+            playerSpeed = value;
             break;
+
         case 7:
-            level = value;
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C95D0", "1F 20 03 D5 C0 03 5F D6", boolean);
             break;
+
         case 8:
-            break;
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x2B71414", "1F 20 03 D5 C0 03 5F D6", boolean);
+
         case 9:
+            patchJumpHeight = boolean;
+            break;
+        case 10:
+            jumpHeight = value;
+            break;
+
+        case 11:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C7028", "20 00 80 D2 C0 03 5F D6", boolean);
+            break;
+
+        case 12:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x2B72E70", "20 00 80 D2 C0 03 5F D6", boolean);
+            break;
+
+        case 14:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C5AF4", "20 00 80 D2 C0 03 5F D6", boolean);
+            break;
+
+        case 15:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C2A04", "40 00 80 D2 C0 03 5F D6", boolean);
+            break;
+        case 16:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C2924", "40 00 80 D2 C0 03 5F D6", boolean);
+            break;
+        case 17:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C2994", "40 00 80 D2 C0 03 5F D6", boolean);
+            break;
+        case 18:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C2B7C", "40 00 80 D2 C0 03 5F D6", boolean);
+            break;
+        case 19:
+            PATCH_LIB_SWITCH("libil2cpp.so", "0x10C0E54", "40 00 80 D2 C0 03 5F D6", boolean);
             break;
     }
 }
