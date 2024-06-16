@@ -24,7 +24,8 @@ bool passThru = false,
      oldPassThru = passThru,
 
      patchPlayerSpeed = false,
-     patchJumpHeight = false;
+     patchJumpHeight = false,
+     infiniteResources = false;
 
 float playerSpeed = 10.0,
       jumpHeight = 20.0;
@@ -64,6 +65,15 @@ float get_JumpHeight(void *instance) {
     return old_get_JumpHeight(instance);
 }
 
+int (*old_GetCurrency)(void *instance, int type);
+int GetCurrency(void *instance, int type) {
+    if (instance != NULL && infiniteResources) {
+        return 99999999;
+    }
+
+    return old_GetCurrency(instance, type);
+}
+
 
 // we will run our hacks in a new thread so our while loop doesn't block process main thread
 void *hack_thread(void *) {
@@ -90,6 +100,7 @@ void *hack_thread(void *) {
     HOOK_LIB("libil2cpp.so", "0x27B1C90", get_MinSpeed, old_get_MinSpeed);
     HOOK_LIB("libil2cpp.so", "0x27B1E40", get_MaxSpeed, old_get_MaxSpeed);
     HOOK_LIB("libil2cpp.so", "0x27B2284", get_JumpHeight, old_get_JumpHeight);
+    HOOK_LIB("libil2cpp.so", "0x22A31B0", GetCurrency, old_GetCurrency);
 
     LOGI(OBFUSCATE("Hooked functions"));
 #else
@@ -121,6 +132,7 @@ jobjectArray GetFeatureList(JNIEnv *env, jobject context) {
             OBFUSCATE("1_Toggle_Purchase for free"),
             OBFUSCATE("2_Toggle_Don't consume items"),
             OBFUSCATE("3_Toggle_GodMode"),
+            OBFUSCATE("20_Toggle_Infinite resources"),
 
             OBFUSCATE("Category_Powers"),
             OBFUSCATE("15_Toggle_Infinite Magnet time"),
@@ -239,6 +251,10 @@ void Changes(JNIEnv *env, jclass clazz, jobject obj,
             break;
         case 19:
             PATCH_LIB_SWITCH("libil2cpp.so", "0x10C0E54", "40 00 80 D2 C0 03 5F D6", boolean);
+            break;
+
+        case 20:
+            infiniteResources = boolean;
             break;
     }
 }
